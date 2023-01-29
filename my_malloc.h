@@ -1,37 +1,37 @@
+#ifndef __MY_MALLOC_H__
+#define __MY_MALLOC_H__
+
 #include <stdio.h>
 #include <stdlib.h>
 
 
-// #define NEW_NODE { 0, NULL, NULL}
-
-struct node{
-    size_t sz;
-    struct node* next;
-    struct node* previous;
+struct node {
+  size_t size;
+  struct node * next;
+  struct node * prev;
 };
-typedef struct node Node;
 
-Node* head = NULL;
+typedef struct node Metadata;
 
+Metadata * head = NULL;
+//Metadata * tail = NULL;
 
-size_t free_size = 0;
-size_t occupied_size = 0;
-
-
-//First Fit malloc/free
-void remove_from_ll(Node* curr);
-void *ff_malloc(size_t size);
-void ff_free(void *ptr);
-void* reuse(Node* trav, size_t size);
-
-//Best Fit malloc/free
-void *bf_malloc(size_t size);
-void bf_free(void *ptr);
-
-void add_to_ll(Node* curr);
-void check_adjacent(Node* curr);
-void* allocate_new(size_t size);
+size_t data_segment = 0;
+size_t data_segment_free = 0;
 
 
-unsigned long get_data_segment_size();
-unsigned long get_data_segment_free_space_size();
+void check_adjacent(Metadata* curr);
+void * reuse_block(size_t size, Metadata * p);
+void * allocate_new_block(size_t size);
+void add_to_ll(Metadata * p);
+void remove_from_ll(Metadata * p);
+
+void * ff_malloc(size_t size);
+void ff_free(void * ptr);
+void * bf_malloc(size_t size);
+void bf_free(void * ptr);
+
+unsigned long get_data_segment_size();             //in bytes
+unsigned long get_data_segment_free_space_size();  //in bytes
+
+#endif

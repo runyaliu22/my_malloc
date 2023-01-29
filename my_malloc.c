@@ -1,236 +1,233 @@
 #include "my_malloc.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "limits.h"
 
-void* allocate_new(size_t size){
 
-    Node* myNode = sbrk(size + sizeof(Node));
-   
-    myNode -> sz = size;
-    myNode -> next = NULL;
-    myNode -> previous = NULL;
+void * ff_malloc(size_t size) {
+  // printf("haha");
 
-    occupied_size += size + sizeof(Node);
+  // if (head == NULL){
+  //   return (void*)allocate_new_block(size) + sizeof(Metadata);
+  // }
 
-    return myNode;
+  Metadata* trav = head;
+  
+  while (trav != NULL && trav->size < size){
+    trav = trav -> next;
+  }
+
+  return reuse_block(size, trav);
 
 }
 
 
-void remove_from_ll(Node* curr){
+void * reuse_block(size_t size, Metadata * trav) {
 
-    if (curr->next == NULL && curr->previous == NULL){
-        head = NULL;
-    }
-    else if (curr->previous == NULL){
-        head = curr->next;
-        head->previous = NULL;
-    }
-    else if (curr->next == NULL){
-        curr->previous->next = NULL;
+  if (trav == NULL){
+    return (void*)allocate_new_block(size) + sizeof(Metadata);
+  }
+  else{
+
+    if (trav->size - size <= sizeof(Metadata)){
+      remove_from_ll(trav);
     }
     else{
-        curr->previous->next = curr->next;
-        curr->next->previous = curr->previous;
+      
+      remove_from_ll(trav);//next and previous set to null, but size still unchanged Metadata* p = (void*)trav + sizeof(Metadata) + size;
+      
+      Metadata* p = (void*)trav + sizeof(Metadata) + size;
+      p->next = NULL;
+      p->prev = NULL;
+      p->size = trav->size - size - sizeof(Metadata);
 
-    }
+      trav->size = size;//modified after used
+      
+      add_to_ll(p);
+      check_adjacent(p);
   
+      
+    }
+
+    return (void*)trav + sizeof(Metadata);
+
+  }
   
 }
 
+void * allocate_new_block(size_t size) {
+ 
+  data_segment += size + sizeof(Metadata);
 
-void *ff_malloc(size_t size){
+  Metadata * new_block = sbrk(size + sizeof(Metadata));
+  
+  new_block->size = size;
+  
+  new_block->prev = NULL;
+  new_block->next = NULL;
 
-    if (head == NULL){
-
-        Node* myNode = allocate_new(size);
-
-        return (void*)myNode + sizeof(Node);
-    }
-
-    else{
-
-        Node* trav = head;
-
-        while (trav != NULL && trav->sz < size){
-            trav = trav->next;
-        }
-
-        if (trav == NULL){
-
-            Node* myNode = allocate_new(size);
-
-            return (void*)myNode + sizeof(Node);
-
-        }
-
-        else{
-
-            return reuse(trav, size);
-        }
-    }
-}
-
-
-void* reuse(Node* trav, size_t size){
-
-    remove_from_ll(trav);
-
-    free_size -= trav->sz + sizeof(Node); 
-
-    if (trav->sz - size > sizeof(Node)){
-                
-        Node* myNode = (void *)trav + sizeof(Node) + size;
-
-        myNode -> sz = trav->sz - size - sizeof(Node);
-        myNode -> next = NULL;
-        myNode -> previous = NULL;
-                    
-        add_to_ll(myNode);
-
-        free_size += myNode->sz + sizeof(Node);
-
-        check_adjacent(myNode);
-
-        trav->sz = size;//////!!!!!!!原来如此！
-
-    }
-
-    return (void*)trav + sizeof(Node);
+  return new_block;
 
 }
 
-void add_to_ll(Node* curr){
-    
-    if (head == NULL){
-        head = curr;
-        return;
-    }
+void add_to_ll(Metadata * p) {
 
-    if (curr < head){
-        curr->next = head;
-        head = curr;
-        curr->next->previous = curr;
-        curr->previous = NULL;
-        return;
-    }
+  data_segment_free += p->size + sizeof(Metadata);
 
-    Node* trav = head;
+  if (head == NULL){
+    head = p;
+    p->next = NULL;
+    p->prev = NULL;
+    return;
+  }
 
-    while (trav->next != NULL && curr > trav->next){
+  if (p < head){
+    p->next = head;
+    head->prev = p;
+    head = p;
+    p->prev = NULL;
+    return;
+  }
+
+  Metadata* trav = head;
+
+    while (trav->next != NULL && p > trav->next){
         trav = trav->next;
     }
 
     if (trav->next == NULL){
 
-        trav->next = curr;
-        curr->previous = trav;
-        curr->next = NULL;
+        trav->next = p;
+        p->prev = trav;
+        p->next = NULL;
 
     }
 
     else{
 
-        Node* store = trav->next;
-        trav->next = curr;
-        curr->next = store;
-        curr->previous = trav;
-        store->previous = curr;
-
-    }
-
-    check_adjacent(curr);
-
-}
-
-
-void check_adjacent(Node* curr){
-
-    if (curr->next != NULL && (void*) curr + sizeof(Node) + curr->sz == (void*) curr->next){
-        
-        curr->sz += curr->next->sz + sizeof(Node);//changed
-        remove_from_ll(curr->next);//changed
-        //free_size -= sizeof(Node);
-    }
-
-    if (curr->previous != NULL && (void*) curr->previous + sizeof(Node) + curr->previous->sz == (void*) curr){
-        
-
-        curr->previous->sz += curr->sz + sizeof(Node);//changed
-        remove_from_ll(curr);//changed
-        //free_size -= sizeof(Node);
+        Metadata* store = trav->next;
+        trav->next = p;
+        p->next = store;
+        p->prev = trav;
+        store->prev = p;
 
     }
 
 }
 
-void ff_free(void *ptr){
+void remove_from_ll(Metadata * p) {
 
-    Node* curr = (void *)ptr - sizeof(Node);
+  data_segment_free -= p->size + sizeof(Metadata);
 
-    free_size += curr->sz + sizeof(Node);
+  if (p->next == NULL && p->prev == NULL) {
+    head = NULL;
+  }
+  else if (p->next == NULL) {
+    
+    p->prev->next = NULL;
+    p->prev = NULL;
+  }
+  else if (head == p) {
+    head = p->next;
+    head->prev = NULL;
+    p->next = NULL;
+  }
+  else {
+    p->prev->next = p->next;
+    p->next->prev = p->prev;
+    p->next = NULL;//set to null before leaving the list
+    p->prev = NULL;
+  }
 
-    add_to_ll(curr);
+  
 
+}
+
+
+void check_adjacent(Metadata* curr){
+
+    if (curr->next != NULL && (void*) curr + sizeof(Metadata) + curr->size == (void*) curr->next){
+        
+        curr->size += curr->next->size + sizeof(Metadata);
+        data_segment_free += curr->next->size + sizeof(Metadata);//compensate for removal later
+        remove_from_ll(curr->next);
+        //data_segment_free += curr->next->size + sizeof(Metadata);//core dump!
+        
+    }
+
+    if (curr->prev != NULL && (void*) curr->prev + sizeof(Metadata) + curr->prev->size == (void*) curr){
+        
+
+        curr->prev->size += curr->size + sizeof(Metadata);
+        data_segment_free += curr->size + sizeof(Metadata);
+        remove_from_ll(curr);
+        
+
+    }
+
+}
+
+void ff_free(void * ptr) {
+
+  Metadata * p = (void*)ptr - sizeof(Metadata);
+
+  add_to_ll(p);
+
+  check_adjacent(p);
+
+}
+
+void * bf_malloc(size_t size) {
+
+
+  // if (head == NULL){
+  //   return (void*)allocate_new_block(size) + sizeof(Metadata);
+  // }
+
+  Metadata* trav = head;
+  Metadata* theNode = NULL;
+  //printf("%zu\n", size);
+
+  while (trav != NULL){
+
+    if (trav->size == size){
+      remove_from_ll(trav);
+      return (void*)trav + sizeof(Metadata);
+      
+    }
+
+    if (trav->size > size ){
+      
+      if (theNode == NULL){
+        theNode = trav;
+      }
+      else{
+        if (trav->size < theNode->size){
+          theNode = trav;
+        }
+      }
+
+    }
+
+    trav = trav->next;
+
+  }
+
+  return reuse_block(size, theNode);
+  
+
+}
+
+void bf_free(void * ptr) {
+  return ff_free(ptr);
 }
 
 unsigned long get_data_segment_size() {
-    return occupied_size;
+  return data_segment;
 }
 
 unsigned long get_data_segment_free_space_size() {
-    
-    return free_size;
-  
-}
-
-//Best Fit malloc/free
-void *bf_malloc(size_t size){
-
-
-    Node* myNode = NULL;
-
-    Node* trav = head;
-    
-    while (trav != NULL){
-
-        if (trav->sz == size){
-            remove_from_ll(trav);
-            free_size -= trav->sz + sizeof(Node);
-            return (void*)trav + sizeof(Node);
-        }
-
-
-        if (trav->sz > size){
-
-            if (myNode== NULL || trav->sz < myNode->sz){
-                myNode = trav;
-            }
-
-        }
-
-        trav = trav->next;
-
-    }
-
-    if (myNode == NULL){
-
-        Node* myNode = allocate_new(size);
-
-        return (void*)myNode + sizeof(Node);
-
-    }
-    else{
-
-        return reuse(myNode, size);
-
-    }
-
-}
-
-
-void bf_free(void *ptr){
-
-    ff_free(ptr);
-
+  return  data_segment_free;
 }
