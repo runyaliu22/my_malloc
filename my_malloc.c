@@ -7,7 +7,6 @@
 
 
 void * ff_malloc(size_t size) {
-  // printf("haha");
 
   // if (head == NULL){
   //   return (void*)allocate_new_block(size) + sizeof(Metadata);
