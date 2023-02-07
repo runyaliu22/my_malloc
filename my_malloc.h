@@ -11,7 +11,7 @@ struct node {
 
 typedef struct node Metadata;
 
-__thread Metadata * head = NULL;
+Metadata * head = NULL;
 
 
 size_t data_segment = 0;
